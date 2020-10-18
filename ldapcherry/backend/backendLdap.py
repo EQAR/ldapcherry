@@ -22,6 +22,8 @@ if sys.version < '3':
 
 PYTHON_LDAP_MAJOR_VERSION = ldap.__version__[0]
 
+SESSION_BIND_DN = '_ldap_bind_dn'
+SESSION_BIND_PASSWORD = '_ldap_bind_pw'
 
 class CaFileDontExist(Exception):
     def __init__(self, cafile):
@@ -60,6 +62,7 @@ class Backend(ldapcherry.backend.Backend):
         self.backend_display_name = self.get_param('display_name')
         self.binddn = self.get_param('binddn')
         self.bindpassword = self.get_param('password')
+        self.bind_session = self.get_param('bind_session', False)
         self.ca = self.get_param('ca', False)
         self.checkcert = self.get_param('checkcert', 'on')
         self.starttls = self.get_param('starttls', 'off')
@@ -241,7 +244,10 @@ class Backend(ldapcherry.backend.Backend):
         """bind to the ldap with the technical account"""
         ldap_client = self._connect()
         try:
-            ldap_client.simple_bind_s(self.binddn, self.bindpassword)
+            if self.bind_session and cherrypy.session.get(SESSION_BIND_DN, None) and cherrypy.session.get(SESSION_BIND_PASSWORD, None):
+                ldap_client.simple_bind_s(cherrypy.session.get(SESSION_BIND_DN), cherrypy.session.get(SESSION_BIND_PASSWORD))
+            else:
+                ldap_client.simple_bind_s(self.binddn, self.bindpassword)
         except Exception as e:
             ldap_client.unbind_s()
             self._exception_handler(e)
@@ -410,6 +416,10 @@ class Backend(ldapcherry.backend.Backend):
             except ldap.INVALID_CREDENTIALS:
                 ldap_client.unbind_s()
                 return False
+            # if activated, we save credentials in session for further binds
+            if self.bind_session:
+                cherrypy.session[SESSION_BIND_DN] = binddn
+                cherrypy.session[SESSION_BIND_PASSWORD] = password
             ldap_client.unbind_s()
             return True
         else:
