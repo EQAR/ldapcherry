@@ -85,8 +85,9 @@ class PasswordMissMatch(Exception):
 
 
 class PPolicyError(Exception):
-    def __init__(self):
-        self.log = "password doesn't match ppolicy"
+    def __init__(self, reason=''):
+        self.reason = reason
+        self.log = "password doesn't match ppolicy: %(reason)s" % { 'reason': reason }
 
 
 class MissingMainFile(Exception):
@@ -276,6 +277,12 @@ def exception_decorator(func):
                     is_admin=is_admin,
                     alert='danger',
                     message="You do not have sufficient permissions on object '" + e.dn + "', please check logs for details"
+                    )
+            elif et is PPolicyError:
+                return self.temp['error.tmpl'].render(
+                    is_admin=is_admin,
+                    alert='danger',
+                    message="The password does not fit the policy: %(reason)s" % { 'reason': e.reason }
                     )
             else:
                 return self.temp['error.tmpl'].render(

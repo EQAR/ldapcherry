@@ -667,7 +667,8 @@ class LdapCherry(object):
                 pwd2 = attr + '2'
                 if params['attrs'][pwd1] != params['attrs'][pwd2]:
                     raise PasswordMissMatch()
-                if not self._checkppolicy(params['attrs'][pwd1])['match']:
+                if params['attrs'][pwd1] != '' and \
+                   not self._checkppolicy(params['attrs'][pwd1])['match']:
                     raise PPolicyError()
                 params['attrs'][attr] = params['attrs'][pwd1]
             if attr in params['attrs'] and self.attributes.attributes[attr]['type'] != 'readonly':
@@ -1017,8 +1018,8 @@ class LdapCherry(object):
     @cherrypy.expose
     @exception_decorator
     def checkppolicy(self, **params):
-        """ search user page """
         self._check_auth(must_admin=False, redir_login=False)
+        """ check if password matches policy (Ajax) """
         keys = list(params.keys())
         if len(keys) != 1:
             cherrypy.response.status = 400
@@ -1028,9 +1029,36 @@ class LdapCherry(object):
         ret = self._checkppolicy(password)
         if ret['match']:
             cherrypy.response.status = 200
+            return "OK"
+        else:
+            cherrypy.response.status = '400 %s' % (ret['reason'])
+            return ret['reason']
+
+    @cherrypy.expose
+    @exception_decorator
+    def checkusername(self, **params):
+        """ check if username is available (Ajax) """
+        self._check_auth(must_admin=False, redir_login=False)
+        keys = list(params.keys())
+        if len(keys) != 1:
+            cherrypy.response.status = 400
+            return "bad argument"
+        username = params[keys[0]]
+        found = False
+        for b in self.backends:
+            try:
+                tmp = self.backends[b].get_user(username)
+            except UserDoesntExist:
+                pass
+            else:
+                found = True
+                break
+        if found:
+            cherrypy.response.status = "400 Username '{}' is already in use.".format(username)
+            return "username in use"
         else:
             cherrypy.response.status = 200
-        return json.dumps(ret, separators=(',', ':'))
+            return "OK"
 
     @cherrypy.expose
     @exception_decorator

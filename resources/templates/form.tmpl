@@ -65,9 +65,9 @@ for a in sorted(attributes.keys(), key=lambda attr: attributes[attr]['weight']):
         %endfor
   </select>
     % elif attr['type'] == 'password':
-      <input type="password" class="form-control" data-ppolicy="ppolicy" name="attr.${a}1" id="${a}1" autocomplete='off' placeholder="${attr['description']}" ${required} readonly  onfocus="this.removeAttribute('readonly');">
+      <input type="password" class="form-control" data-remote="/checkppolicy" name="attr.${a}1" id="${a}1" autocomplete='off' placeholder="${attr['description']}" readonly  onfocus="this.removeAttribute('readonly');">
       <span class="input-group-addon" id="basic-addon-${a}2">Retype ${attr['display_name']}</span>
-      <input type="password" class="form-control" data-match="#${a}1"  data-match-error="Passwords don't match" name="attr.${a}2" id="#${a}2" autocomplete='off' placeholder="Confirm" ${required} readonly  onfocus="this.removeAttribute('readonly');">
+      <input type="password" class="form-control" data-match="#${a}1"  data-match-error="Passwords don't match" name="attr.${a}2" id="#${a}2" autocomplete='off' placeholder="Confirm" readonly  onfocus="this.removeAttribute('readonly');">
     % elif attr['type'] == 'textfield':
       <textarea id="attr.${a}" name="attr.${a}" class="form-control" placeholder="${attr['description']}">${raw_value}</textarea>
     % endif
