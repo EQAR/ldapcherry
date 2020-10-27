@@ -14,7 +14,8 @@ import ldapcherry.backend
 import sys
 from ldapcherry.exceptions import UserDoesntExist, \
     GroupDoesntExist, \
-    UserAlreadyExists
+    UserAlreadyExists, \
+    PermissionDenied
 import os
 import re
 if sys.version < '3':
@@ -80,6 +81,7 @@ class Backend(ldapcherry.backend.Backend):
         # split it to get a real list, and convert it to bytes
         for o in re.split(r'\W+', self.get_param('objectclasses')):
             self.objectclasses.append(self._byte_p23(o))
+
         self.group_attrs = {}
         self.group_attrs_keys = set([])
         for param in config:
@@ -448,6 +450,18 @@ class Backend(ldapcherry.backend.Backend):
         """add a user"""
 
         ldap_client = self._bind()
+
+        # check if user exists
+        if self.get_param('unique_user_attr', False) and \
+           self._get_user(self._byte_p2(attrs[self.dn_user_attr]), NO_ATTR):
+            ldap_client.unbind_s()
+            raise UserAlreadyExists(attrs[self.key], self.backend_name)
+
+        # if specified, use custom location, otherwise default
+        parent_dn = self.userdn
+        if '_parent_dn' in attrs:
+            parent_dn = attrs['_parent_dn']
+
         # encoding crap
         attrs_srt = self.attrs_pretreatment(self._remove_hidden_attrs(attrs))
 
@@ -461,13 +475,15 @@ class Backend(ldapcherry.backend.Backend):
                     )
                 ) + \
             self._byte_p2(',') + \
-            self._byte_p2(self.userdn)
+            self._byte_p2(parent_dn)
         # gen the ldif first add_s and add the user
         ldif = modlist.addModlist(attrs_srt)
         try:
             ldap_client.add_s(dn, ldif)
         except ldap.ALREADY_EXISTS as e:
             raise UserAlreadyExists(attrs[self.key], self.backend_name)
+        except ldap.INSUFFICIENT_ACCESS as e:
+            raise PermissionDenied(parent_dn, self.backend_name)
         except Exception as e:
             ldap_client.unbind_s()
             self._exception_handler(e)
@@ -501,13 +517,15 @@ class Backend(ldapcherry.backend.Backend):
             new = {battr: self._modlist(self._byte_p3(bcontent))}
             # if attr is dn entry, use rename
             if attr.lower() == self.dn_user_attr.lower():
-                ldap_client.rename_s(
-                    dn,
-                    ldap.dn.dn2str([[(battr, bcontent, 1)]])
-                    )
-                dn = ldap.dn.dn2str(
-                    [[(battr, bcontent, 1)]] + ldap.dn.str2dn(dn)[1:]
-                    )
+                # ... but only if username changes
+                if attrs[attr] != username:
+                    ldap_client.rename_s(
+                        dn,
+                        ldap.dn.dn2str([[(battr, bcontent, 1)]])
+                        )
+                    dn = ldap.dn.dn2str(
+                        [[(battr, bcontent, 1)]] + ldap.dn.str2dn(dn)[1:]
+                        )
             else:
                 # if attr is already set, replace the value
                 # (see dict old passed to modifyModlist)
@@ -529,6 +547,8 @@ class Backend(ldapcherry.backend.Backend):
                 if ldif:
                     try:
                         ldap_client.modify_s(dn, ldif)
+                    except ldap.INSUFFICIENT_ACCESS as e:
+                        raise PermissionDenied(dn, self.backend_name)
                     except Exception as e:
                         ldap_client.unbind_s()
                         self._exception_handler(e)
@@ -585,6 +605,8 @@ class Backend(ldapcherry.backend.Backend):
                     )
                 except ldap.NO_SUCH_OBJECT as e:
                     raise GroupDoesntExist(group, self.backend_name)
+                except ldap.INSUFFICIENT_ACCESS as e:
+                    raise PermissionDenied(group, self.backend_name)
                 except Exception as e:
                     ldap_client.unbind_s()
                     self._exception_handler(e)
@@ -622,6 +644,8 @@ class Backend(ldapcherry.backend.Backend):
                             'backend': self.backend_name
                             }
                     )
+                except ldap.INSUFFICIENT_ACCESS as e:
+                    raise PermissionDenied(group, self.backend_name)
                 except Exception as e:
                     ldap_client.unbind_s()
                     self._exception_handler(e)
@@ -642,6 +666,8 @@ class Backend(ldapcherry.backend.Backend):
         # search an process the result a little
         for u in self._search(searchfilter, DISPLAYED_ATTRS, self.userdn):
             attrs = {}
+            attrs['_dn'] = u[0]
+            attrs['_parent_dn'] = ','.join(u[0].split(',')[1:])
             attrs_tmp = u[1]
             for attr in attrs_tmp:
                 value_tmp = attrs_tmp[attr]

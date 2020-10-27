@@ -218,6 +218,16 @@ class GroupDoesntExist(Exception):
             " in backend '" + backend + "'"
 
 
+class PermissionDenied(Exception):
+    def __init__(self, dn, backend):
+        self.dn = dn
+        self.bakend = backend
+        self.log = \
+            "permission denied on" \
+            " '" + dn + "'" \
+            " in backend '" + backend + "'"
+
+
 class TemplateRenderError(Exception):
     def __init__(self, error):
         self.log = "Template Render Error: " + error
@@ -260,6 +270,12 @@ def exception_decorator(func):
                     is_admin=is_admin,
                     alert='danger',
                     message="Missing group, please check logs for details"
+                    )
+            elif et is PermissionDenied:
+                return self.temp['error.tmpl'].render(
+                    is_admin=is_admin,
+                    alert='danger',
+                    message="You do not have sufficient permissions on object '" + e.dn + "', please check logs for details"
                     )
             else:
                 return self.temp['error.tmpl'].render(
