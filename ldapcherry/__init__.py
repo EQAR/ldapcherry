@@ -21,6 +21,7 @@ from ldapcherry.exceptions import *
 from ldapcherry.lclogging import *
 from ldapcherry.roles import Roles
 from ldapcherry.attributes import Attributes
+from ldapcherry.resetpassword import *
 
 # Cherrypy http framework imports
 import cherrypy
@@ -398,7 +399,8 @@ class LdapCherry(object):
         for t in ('index.tmpl', 'error.tmpl', 'login.tmpl', '404.tmpl',
                   'searchadmin.tmpl', 'searchuser.tmpl', 'adduser.tmpl',
                   'roles.tmpl', 'groups.tmpl', 'form.tmpl', 'selfmodify.tmpl',
-                  'modify.tmpl', 'service_unavailable.tmpl'
+                  'modify.tmpl', 'service_unavailable.tmpl',
+                  'reset_password_req.tmpl', 'reset_password_set.tmpl',
                   ):
             self.temp[t] = self.temp_lookup.get_template(t)
 
@@ -451,6 +453,9 @@ class LdapCherry(object):
 
             # init server-side autofill
             self._init_autofill(config)
+
+            # init password reset class
+            self.resetpassword = ResetPassword(config['resetpassword'], self.backends, cherrypy.log.error)
 
             # loading the ppolicy
             self._init_ppolicy(config)
@@ -912,7 +917,7 @@ class LdapCherry(object):
     def signin(self, url=None):
         """simple signin page
         """
-        return self.temp['login.tmpl'].render(url=url)
+        return self.temp['login.tmpl'].render(url=url, signin=True)
 
     @cherrypy.expose
     @exception_decorator
@@ -977,6 +982,34 @@ class LdapCherry(object):
 
     @cherrypy.expose
     @exception_decorator
+    def reset_password(self, login=None, token=None, password1=None, password2=None):
+        """ send email with a token to reset password
+        """
+        if not login and not token:
+            """
+            stage 1: show form
+            """
+            return self.temp['reset_password_req.tmpl'].render(signin=True, confirm=False)
+        elif login:
+            """
+            stage 2: check user and send token
+            """
+            self.resetpassword.send_token(login)
+            return self.temp['reset_password_req.tmpl'].render(signin=True, confirm=True)
+        elif token and not password1:
+            """
+            stage 3: form to change password
+            """
+            return self.temp['reset_password_set.tmpl'].render(signin=True, token=token, changed=False)
+        elif token and password1 and password2:
+            """
+            stage 4: change password
+            """
+            self.resetpassword.change_password(token, password1)
+            return self.temp['reset_password_set.tmpl'].render(signin=True, changed=True)
+
+    @cherrypy.expose
+    @exception_decorator
     def index(self):
         """main page rendering
         """
@@ -1018,14 +1051,12 @@ class LdapCherry(object):
     @cherrypy.expose
     @exception_decorator
     def checkppolicy(self, **params):
-        self._check_auth(must_admin=False, redir_login=False)
         """ check if password matches policy (Ajax) """
         keys = list(params.keys())
         if len(keys) != 1:
             cherrypy.response.status = 400
             return "bad argument"
         password = params[keys[0]]
-        is_admin = self._check_admin()
         ret = self._checkppolicy(password)
         if ret['match']:
             cherrypy.response.status = 200

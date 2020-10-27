@@ -229,6 +229,14 @@ class PermissionDenied(Exception):
             " in backend '" + backend + "'"
 
 
+class InvalidToken(Exception):
+    def __init__(self, reason):
+        self.reason = reason
+        self.log = \
+            "invalid password reset token" \
+            " submitted: '" + reason + "'"
+
+
 class TemplateRenderError(Exception):
     def __init__(self, error):
         self.log = "Template Render Error: " + error
@@ -246,10 +254,14 @@ def exception_decorator(func):
             cherrypy.response.status = 500
             self._handle_exception(e)
             username = self._check_session()
-            if not username:
-                return self.temp['service_unavailable.tmpl'].render()
-            is_admin = self._check_admin()
             et = type(e)
+            if not username:
+                if et is InvalidToken:
+                    message = "The password reset token you provided is invalid."
+                else:
+                    message = None
+                return self.temp['service_unavailable.tmpl'].render(message=message)
+            is_admin = self._check_admin()
             if et is UserDoesntExist:
                 user = e.user
                 return self.temp['error.tmpl'].render(

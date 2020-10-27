@@ -72,6 +72,8 @@ class Backend(ldapcherry.backend.Backend):
         self.userdn = self.get_param('userdn')
         self.groupdn = self.get_param('groupdn')
         self.user_filter_tmpl = self.get_param('user_filter_tmpl')
+        self.user_email_filter_tmpl = self.get_param('user_email_filter_tmpl', None)
+        self.email_user_attr = self.get_param('email_user_attr', None)
         self.group_filter_tmpl = self.get_param('group_filter_tmpl')
         self.search_filter_tmpl = self.get_param('search_filter_tmpl')
         self.dn_user_attr = self.get_param('dn_user_attr')
@@ -333,6 +335,21 @@ class Backend(ldapcherry.backend.Backend):
         else:
             dn_entry = r[0]
         return dn_entry
+
+    def _get_user_email(self, searchstring):
+        """Get a user from the ldap"""
+
+        searchstring = ldap.filter.escape_filter_chars(searchstring)
+        user_filter = self.user_email_filter_tmpl % {
+            'searchstring': self._uni(searchstring)
+        }
+        attrs = [ self.key, self.email_user_attr ]
+        r = self._search(self._byte_p2(user_filter), attrs, self.userdn)
+
+        if len(r) == 0:
+            return None
+
+        return r[0]
 
     # python-ldap talks in bytes,
     # as the rest of ldapcherry talks in unicode utf-8:
@@ -686,6 +703,27 @@ class Backend(ldapcherry.backend.Backend):
         tmp = self._get_user(self._byte_p2(username), ALL_ATTRS)
         if tmp is None:
             raise UserDoesntExist(username, self.backend_name)
+        ret['_dn'] = tmp[0]
+        ret['_parent_dn'] = ','.join(tmp[0].split(',')[1:])
+        attrs_tmp = tmp[1]
+        for attr in attrs_tmp:
+            value_tmp = attrs_tmp[attr]
+            if len(value_tmp) == 1:
+                ret[attr] = value_tmp[0]
+            else:
+                ret[attr] = value_tmp
+        return ret
+
+    def get_user_email(self, user_or_email):
+        """Get a specific user by username or email address"""
+        if not (self.user_email_filter_tmpl and self.email_user_attr):
+            return None
+        ret = {}
+        tmp = self._get_user_email(self._byte_p2(user_or_email))
+        if tmp is None:
+            raise UserDoesntExist(user_or_email, self.backend_name)
+        ret['_dn'] = tmp[0]
+        ret['_parent_dn'] = ','.join(tmp[0].split(',')[1:])
         attrs_tmp = tmp[1]
         for attr in attrs_tmp:
             value_tmp = attrs_tmp[attr]
