@@ -1097,12 +1097,16 @@ class LdapCherry(object):
         """ search user page """
         self._check_auth(must_admin=True)
         is_admin = self._check_admin()
+        """
         if searchstring is not None:
             res = self._search(searchstring)
         else:
             res = None
+        """
+        res = self._search(searchstring or '')
         attrs_list = self.attributes.get_search_attributes()
         return self.temp['searchadmin.tmpl'].render(
+            searchstring=searchstring or '',
             searchresult=res,
             attrs_list=attrs_list,
             is_admin=is_admin,

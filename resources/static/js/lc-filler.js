@@ -9,8 +9,8 @@
 
 function lcUid(firstname, lastname){
     var ascii_firstname = removeDiacritics(firstname).toLowerCase().replace(/[^a-z]/g, '');
-    var ascii_lastname = removeDiacritics(lastname).toLowerCase().replace(/[^a-z]/g, '');
-    return ascii_firstname.charAt(0)+ascii_lastname.substring(0,7);
+    var ascii_lastname = removeDiacritics(lastname).toLowerCase().replace(/[^a-z]/g, ' ');
+    return ascii_firstname.charAt(0)+ascii_lastname.split(' ')[0];
 }
 
 function lcDisplayName(firstname, lastname){
