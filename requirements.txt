@@ -3,3 +3,4 @@ PyYAML
 Mako
 python-ldap
 python-kadmV
+requests
