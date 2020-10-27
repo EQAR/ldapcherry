@@ -43,9 +43,9 @@ for a in sorted(attributes.keys(), key=lambda attr: attributes[attr]['weight']):
   %>
 
   <span class="input-group-addon" id="basic-addon-${a}">${attr['display_name']}</span>
-    % if modify and a == keyattr:
+    % if ( modify and (a == keyattr or ('immutable' in attr and attr['immutable']) ) ) or attr['type'] == 'readonly':
   <input type="hidden" id="attr.${a}" name="attr.${a}" class="form-control" autocomplete='off' aria-describedby="basic-addon-${a}" ${required} ${value | n} readonly  onfocus="this.removeAttribute('readonly');">
-  <span class="form-control" aria-describedby="basic-addon-${a}">${raw_value}</span>
+  <span class="form-control form-control__readonly" aria-describedby="basic-addon-${a}">${raw_value}</span>
     % elif attr['type'] == 'string':
   <input type="text"   id="attr.${a}" name="attr.${a}" class="form-control" autocomplete='off' placeholder="${attr['description']}" aria-describedby="basic-addon-${a}" ${required} ${value | n} readonly  onfocus="this.removeAttribute('readonly');">
     % elif attr['type'] == 'email':

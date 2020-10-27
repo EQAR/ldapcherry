@@ -92,7 +92,8 @@ class Backend(ldapcherry.backend.Backend):
 
         self.attrlist = []
         for a in attrslist:
-            self.attrlist.append(self._byte_p2(a))
+            if a[0] != '_':
+                self.attrlist.append(self._byte_p2(a))
 
     # exception handler (mainly to log something meaningful)
     def _exception_handler(self, e):
@@ -402,6 +403,14 @@ class Backend(ldapcherry.backend.Backend):
                 )
             return attrs_srt
 
+    def _remove_hidden_attrs(self, attrs):
+        """ Removes hidden attributes from dict (starting with _) """
+        ret = {}
+        for a in attrs:
+            if a[0] != '_':
+                ret[a] = attrs[a]
+        return ret
+
     def auth(self, username, password):
         """Authentication of a user"""
 
@@ -437,9 +446,10 @@ class Backend(ldapcherry.backend.Backend):
 
     def add_user(self, attrs):
         """add a user"""
+
         ldap_client = self._bind()
         # encoding crap
-        attrs_srt = self.attrs_pretreatment(attrs)
+        attrs_srt = self.attrs_pretreatment(self._remove_hidden_attrs(attrs))
 
         attrs_srt[self._byte_p2('objectClass')] = self.objectclasses
         # construct is DN
@@ -484,7 +494,8 @@ class Backend(ldapcherry.backend.Backend):
             raise UserDoesntExist(username, self.backend_name)
         dn = self._byte_p2(tmp[0])
         old_attrs = tmp[1]
-        for attr in attrs:
+
+        for attr in self._remove_hidden_attrs(attrs):
             bcontent = self._byte_p2(attrs[attr])
             battr = self._byte_p2(attr)
             new = {battr: self._modlist(self._byte_p3(bcontent))}

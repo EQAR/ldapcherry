@@ -19,7 +19,7 @@ if sys.version < '3':
 
 # List of available types for form
 types = ['string', 'textfield', 'email', 'int', 'stringlist',
-         'fix', 'password']
+         'fix', 'password', 'readonly']
 
 
 class Attributes:
@@ -105,6 +105,8 @@ class Attributes:
         elif attr_type == 'fix':
             if value != self.attributes[attrid]['value']:
                 raise WrongAttrValue(attrid, attr_type)
+        elif attr_type == 'readonly':
+            return
         elif attr_type == 'password':
             return
 

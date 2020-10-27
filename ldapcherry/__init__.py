@@ -650,7 +650,7 @@ class LdapCherry(object):
                 if not self._checkppolicy(params['attrs'][pwd1])['match']:
                     raise PPolicyError()
                 params['attrs'][attr] = params['attrs'][pwd1]
-            if attr in params['attrs']:
+            if attr in params['attrs'] and self.attributes.attributes[attr]['type'] != 'readonly':
                 self.attributes.check_attr(attr, params['attrs'][attr])
                 backends = self.attributes.get_backends_attributes(attr)
                 for b in backends:
@@ -717,7 +717,9 @@ class LdapCherry(object):
                                 )['match']:
                         raise PPolicyError()
                     params['attrs'][attr] = params['attrs'][pwd1]
-            if attr in params['attrs'] and params['attrs'][attr] != '':
+            if attr in params['attrs'] and params['attrs'][attr] != '' \
+               and self.attributes.attributes[attr]['type'] != 'readonly' \
+               and not ('immutable' in self.attributes.attributes[attr] and self.attributes.attributes[attr]['immutable']):
                 self.attributes.check_attr(attr, params['attrs'][attr])
                 backends = self.attributes.get_backends_attributes(attr)
                 for b in backends:
