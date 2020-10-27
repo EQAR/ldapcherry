@@ -173,6 +173,15 @@ class LdapCherry(object):
                 self._handle_exception(e)
                 raise BackendModuleInitFail(module)
 
+    def _init_autofill(self, config):
+        self.backends_autofill = {}
+        for entry in config['autofill']:
+            # split at the first dot
+            backend, sep, field = entry.partition('.')
+            if backend not in self.backends_autofill:
+                self.backends_autofill[backend] = {}
+            self.backends_autofill[backend][field] = config['autofill'][entry]
+
     def _init_custom_js(self, config):
         self.custom_js = []
         if '/custom' not in config:
@@ -440,6 +449,9 @@ class LdapCherry(object):
             self._init_backends(config)
             self._check_backends()
 
+            # init server-side autofill
+            self._init_autofill(config)
+
             # loading the ppolicy
             self._init_ppolicy(config)
 
@@ -634,6 +646,14 @@ class LdapCherry(object):
                     "You must be logged in to access this ressource.",
                     )
 
+    def _autofill_attrs(self, backend, attrs):
+        """ Copy attributes dict and add autofill values """
+        ret = attrs.copy()
+        if backend in self.backends_autofill:
+            for key in self.backends_autofill[backend]:
+                ret[key] = self.backends_autofill[backend][key] % attrs
+        return ret
+
     def _adduser(self, params):
         cherrypy.log.error(
             msg="add user form attributes: " + str(params),
@@ -660,7 +680,7 @@ class LdapCherry(object):
         added = False
         for b in badd:
             try:
-                self.backends[b].add_user(badd[b])
+                self.backends[b].add_user(self._autofill_attrs(b, badd[b]))
                 added = True
             except UserAlreadyExists as e:
                 self._add_notification(
@@ -702,7 +722,7 @@ class LdapCherry(object):
             severity=logging.DEBUG
         )
 
-    def _modify_attrs(self, params, attr_list, username):
+    def _modify_attrs(self, params, attr_list, username, autofill=True):
         badd = {}
         for attr in attr_list:
             if self.attributes.attributes[attr]['type'] == 'password':
@@ -728,6 +748,8 @@ class LdapCherry(object):
                     badd[b][backends[b]] = params['attrs'][attr]
         for b in badd:
             try:
+                if autofill:
+                    badd[b] = self._autofill_attrs(b, badd[b])
                 self.backends[b].set_attrs(username, badd[b])
             except UserDoesntExist as e:
                 self._add_notification(
@@ -747,6 +769,7 @@ class LdapCherry(object):
             params,
             self.attributes.get_selfattributes(),
             username,
+            autofill=False,
             )
         cherrypy.log.error(
             msg="user '" + username + "' modified his attributes",
@@ -768,7 +791,8 @@ class LdapCherry(object):
         badd = self._modify_attrs(
             params,
             self.attributes.get_attributes(),
-            username
+            username,
+            autofill=True,
             )
 
         sess = cherrypy.session
