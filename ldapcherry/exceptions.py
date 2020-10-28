@@ -296,6 +296,12 @@ def exception_decorator(func):
                     alert='danger',
                     message="The password does not fit the policy: %(reason)s" % { 'reason': e.reason }
                     )
+            elif et is WrongAttrValue:
+                return self.temp['error.tmpl'].render(
+                    is_admin=is_admin,
+                    alert='danger',
+                    message="The value provided in '%(attr)s' does not fit the %(type)s data type" % { 'attr': e.attr, 'type': e.attrtype }
+                    )
             else:
                 return self.temp['error.tmpl'].render(
                     is_admin=is_admin,
