@@ -26,14 +26,18 @@ if sys.version_info[0] == 2:
         'CherryPy >= 3.0.0,< 18.0.0',
         'python-ldap',
         'PyYAML',
-        'Mako'
+        'Mako',
+        'python-kadmV',
+        'requests',
         ],
 elif sys.version_info[0] == 3:
     install_requires = [
         'CherryPy >= 3.0.0',
         'python-ldap',
         'PyYAML',
-        'Mako'
+        'Mako',
+        'python-kadmV',
+        'requests',
         ],
 else:
     print('unsupported version')
