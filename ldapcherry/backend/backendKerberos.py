@@ -22,7 +22,8 @@ from ldapcherry.exceptions import UserDoesntExist, \
 if sys.version < '3':
     from sets import Set as set
 
-SESSION_KADMIN = '_krb_user_kadm'
+SESSION_PRINCIPAL = '_krb_principal'
+SESSION_PASSWORD = '_krb_password'
 
 class Backend(ldapcherry.backend.Backend):
 
@@ -46,7 +47,30 @@ class Backend(ldapcherry.backend.Backend):
         self.config = config
         if 'principal' not in self.config:
             self.config['principal'] = 'ldapcherry/' + getfqdn()
-        self._kadm_admin = kadmin.init_with_keytab(self.config['principal'], self.config['keytab'])
+
+    def kadm(self, as_admin=False):
+        """
+        return a context manager to connect with admin or user kadmin connection, depending on role
+        """
+        class KadmContext():
+            def __init__(self, backend, as_admin=False):
+                self.backend = backend
+                self.as_admin = as_admin
+
+            def __enter__(self):
+                if cherrypy.session.get('isadmin', False) or self.as_admin:
+                    self.kadm = kadmin.init_with_keytab(self.backend.config['principal'], self.backend.config['keytab'])
+                elif cherrypy.session.get(SESSION_PRINCIPAL, None) and cherrypy.session.get(SESSION_PASSWORD, None):
+                    self.kadm = kadmin.init_with_password(cherrypy.session.get(SESSION_PRINCIPAL), cherrypy.session.get(SESSION_PASSWORD))
+                else:
+                    raise PermissionDenied('(corrupted session)', self.backend.backend_name)
+                return self.kadm
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                del self.kadm
+                return None
+
+        return KadmContext(self, as_admin)
 
     def _user2princ(self, username):
         return('{}@{}'.format(username, self.config['realm']))
@@ -54,48 +78,37 @@ class Backend(ldapcherry.backend.Backend):
     def _log(self, message):
         self._logger(severity=logging.DEBUG, msg='[' + __name__ + '::Backend] ' + message)
 
-    @property
-    def kadm(self):
-        """
-        return admin (self.kadm) or user (from session) kadm connection, depending on role
-        """
-        if cherrypy.session.get('isadmin', False):
-            return self._kadm_admin
-        elif cherrypy.session.get(SESSION_KADMIN, None):
-            return cherrypy.session.get(SESSION_KADMIN)
-        else:
-            raise PermissionDenied('(user kadm not found)', self.backend_name)
-
     def _add_princ(self, principal, password = None):
-        try:
-            self.kadm.addprinc(principal, password)
-        except kadmin.DuplicateError:
-            raise UserAlreadyExists(principal, self.backend_name)
+        with self.kadm() as kadm:
+            try:
+                self.kadm.addprinc(principal, password)
+            except kadmin.DuplicateError:
+                raise UserAlreadyExists(principal, self.backend_name)
 
     def _get_princ(self, principal, as_admin=False):
-        if as_admin:
-            kadm = self._kadm_admin
-        else:
-            kadm = self.kadm
-        obj = kadm.getprinc(principal)
-        if obj:
-            return obj
-        else:
-            raise UserDoesntExist(principal, self.backend_name)
+        with self.kadm(as_admin) as kadm:
+            obj = kadm.getprinc(principal)
+            if obj:
+                return obj
+            else:
+                raise UserDoesntExist(principal, self.backend_name)
 
     def _change_password(self, principal, password, reset_by_token=False):
         try:
             self._get_princ(principal, as_admin=reset_by_token).change_password(password)
+            if not reset_by_token:
+                cherrypy.session[SESSION_PASSWORD] = password
         except kadmin.PasswordClassError:
             raise PPolicyError(reason='password does not contain enough character classes')
         except kadmin.PasswordTooShortError:
             raise PPolicyError(reason='password is too short')
 
     def _del_princ(self, principal):
-        try:
-            self.kadm.delprinc(principal)
-        except kadmin.UnknownPrincipalError:
-            raise UserDoesntExist(principal, self.backend_name)
+        with self.kadm() as kadm:
+            try:
+                kadm.delprinc(principal)
+            except kadmin.UnknownPrincipalError:
+                raise UserDoesntExist(principal, self.backend_name)
 
     def auth(self, username, password):
         """ Check authentication against the backend
@@ -119,7 +132,8 @@ class Backend(ldapcherry.backend.Backend):
             """ wrong password, without pre-auth """
             return False
         else:
-            cherrypy.session[SESSION_KADMIN] = kadm
+            cherrypy.session[SESSION_PRINCIPAL] = self._user2princ(username)
+            cherrypy.session[SESSION_PASSWORD] = password
             return True
 
     def reset_user_password(self, username, password):
