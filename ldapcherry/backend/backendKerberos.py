@@ -81,7 +81,7 @@ class Backend(ldapcherry.backend.Backend):
     def _add_princ(self, principal, password = None):
         with self.kadm() as kadm:
             try:
-                self.kadm.addprinc(principal, password)
+                kadm.addprinc(principal, password)
             except kadmin.DuplicateError:
                 raise UserAlreadyExists(principal, self.backend_name)
 
