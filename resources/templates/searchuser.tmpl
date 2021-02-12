@@ -10,7 +10,7 @@
                 </div>
                 <div class="form-group">
                     <label for="submit">Submit</label>
-                    <button type="submit" id="submit" class="form-control btn btn-default green">
+                    <button type="submit" id="submit" class="form-control btn btn-default">
                     <span class="glyphicon glyphicon-search"></span> Search</button>
                 </div>
             </form>
@@ -20,7 +20,7 @@
     <div class="row clearfix top-buffer bottom-buffer">
         <div class="col-md-12 column">
             <div class="well well-sm">
-                    <table id="RecordTable" class="table table-hover table-condensed tablesorter">
+                    <table id="UserTable" class="table table-hover table-condensed tablesorter">
                         <thead>
                             <tr>
                             %for attr in sorted(attrs_list.keys(), key=lambda attr: attrs_list[attr]['weight']):

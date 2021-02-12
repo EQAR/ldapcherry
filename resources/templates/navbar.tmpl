@@ -1,36 +1,51 @@
 ## -*- coding: utf-8 -*-
 #<%inherit file="base.tmpl"/>
 <%block name="navbar">
-	<div class="row clearfix">
-		<div class="col-md-12 column">
-			<nav class="navbar navbar-inverse" role="navigation">
+    <div class="row clearfix">
+        <div class="col-md-12 column">
+            <nav class="navbar" role="navigation">
                 <div class="navbar-header">
                      <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1"> <span class="sr-only">Toggle navigation</span><span class="icon-bar"></span><span class="icon-bar"></span><span class="icon-bar"></span></button>
-                <a class="navbar-brand" href="/"><img src="/static/img/icon.png" alt="LdapCherry" height="22" width="22"></a>
-                <a class="navbar-brand" href="/selfmodify">Self Modify</a>
+                <a class="navbar-brand" href="/">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="128" height="36" viewBox="0 0 128 36" class="logo">
+                        <path d="M102.32.56l-11.88,25H94.1L106,.56h-3.66" fill="#0d4f87"/>
+                        <path d="M109.66.56l-11.88,25h3.66l11.88-25h-3.66" fill="#2f659c"/>
+                        <path d="M117,.56l-11.88,25h3.66l11.88-25H117" fill="#5880b2"/>
+                        <path d="M124.34.56l-11.88,25h3.66L128,.56h-3.66" fill="#88a3ca"/>
+                        <path d="M17.53,18.65q0,2.54-1.28,3.31t-5.55.76q-4.5,0-5.73-1.6T3.75,13.68h17.4v-2q0-7.1-2.08-9.32T10.32.2Q4.2.2,2.1,2.74T0,12.69q0,8,2.09,10.51t8.77,2.5q5.74,0,8-1.54t2.29-5.39l0-.91H17.53ZM3.8,10.83Q3.8,6,5.08,4.61t5.58-1.42q4.27,0,5.56,1.21t1.29,5.25l0,1.17ZM41.31.6l.18,3.06-.08.08Q39.41.2,33.49.2,28.1.2,26,3T24,12.93q0,7.18,2,10t7.28,2.8q6.35,0,7.94-3.42l.08.08V36h3.56V.6ZM39.87,5.07q1.3,1.88,1.3,8.48,0,5.45-1.42,7.31t-5.54,1.86q-4,0-5.31-1.8t-1.26-7.62q0-6.21,1.23-8.15T34,3.19Q38.57,3.19,39.87,5.07Zm12.3,1.71q0-3.73,6.52-3.73,3.84,0,5,1.25T64.8,9.79v3l-.08,0q-1.26-2.6-7.63-2.6-5.36,0-7.4,1.71t-2,6.21q0,7.56,9.15,7.56,6.19,0,8.21-3l.08,0-.28,2.67h3.56V9q0-5.13-2.13-7T58.05.2q-5.57,0-7.48,1.49T48.66,7.51h3.52C52.17,7.15,52.17,6.91,52.17,6.79ZM63.53,14.1Q65,15.11,65,18q0,4.67-7.5,4.67-3.73,0-4.94-1t-1.22-4q0-2.91,1.23-3.79t5.31-.88Q62.07,13.08,63.53,14.1Zm9.15,11.27h3.56V10.51Q76.24,3,82.17,3q4,0,4,3.83,0,.34-.08,1.33l-.08.62h3.49l0-1.71Q89.58,0,82.9,0,78.07,0,76,3.52l-.08-.08L76.24.6H72.68V25.37" fill="#0d4f87"/>
+                    </svg>
+                </a>
+                % if not signin:
+                <a class="navbar-brand" href="/selfmodify">My Account</a>
+                % endif
                 % if is_admin:
                 <a class="navbar-brand" href="/adduser">Add User</a>
-                <a class="navbar-brand" href="/searchadmin">Delete/Modify User</a>
+                <a class="navbar-brand" href="/searchadmin">Modify/Delete Users</a>
                 % endif
                 </div>
+                % if signin:
+                <h1>User Account Management</h1>
+                % endif
+                % if not signin:
                 <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
                     <a class="navbar-brand navbar-right" href='/logout'><span class="glyphicon glyphicon-off"></span> Logout</a>
                             % if is_admin:
-		            <form method='GET' action='/searchadmin' class="navbar-form navbar-right" role="search" data-toggle="validator">
+                    <form method='GET' action='/searchadmin' class="navbar-form navbar-right" role="search" data-toggle="validator">
                             % else:
-		            <form method='GET' action='/searchuser' class="navbar-form navbar-right" role="search" data-toggle="validator">
+                    <form method='GET' action='/searchuser' class="navbar-form navbar-right" role="search" data-toggle="validator">
                             % endif
                         <div class="form-group">
                             % if is_admin:
-                            <input type="text" class="form-control" name="searchstring" placeholder="Search User">
+                            <input type="text" class="form-control" name="searchstring" placeholder="Name, username, email, ...">
                             % else:
-                            <input type="text" class="form-control" data-minlength="3" name="searchstring" placeholder="Search User" data-error="Too short" required>
+                            <input type="text" class="form-control" data-minlength="3" name="searchstring" placeholder="Name, username, email, ..." data-error="Too short" required>
                             % endif
                         </div>
-                        <button type="submit" class="btn btn-default">Submit</button>
+                        <button type="submit" class="btn btn-default">Search</button>
                     </form>
                 </div>
+                % endif
             </nav>
-		</div>
-	</div>
+        </div>
+    </div>
 </%block>

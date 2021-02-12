@@ -21,6 +21,7 @@ from ldapcherry.exceptions import *
 from ldapcherry.lclogging import *
 from ldapcherry.roles import Roles
 from ldapcherry.attributes import Attributes
+from ldapcherry.resetpassword import *
 
 # Cherrypy http framework imports
 import cherrypy
@@ -172,6 +173,15 @@ class LdapCherry(object):
             except Exception as e:
                 self._handle_exception(e)
                 raise BackendModuleInitFail(module)
+
+    def _init_autofill(self, config):
+        self.backends_autofill = {}
+        for entry in config['autofill']:
+            # split at the first dot
+            backend, sep, field = entry.partition('.')
+            if backend not in self.backends_autofill:
+                self.backends_autofill[backend] = {}
+            self.backends_autofill[backend][field] = config['autofill'][entry]
 
     def _init_custom_js(self, config):
         self.custom_js = []
@@ -389,7 +399,8 @@ class LdapCherry(object):
         for t in ('index.tmpl', 'error.tmpl', 'login.tmpl', '404.tmpl',
                   'searchadmin.tmpl', 'searchuser.tmpl', 'adduser.tmpl',
                   'roles.tmpl', 'groups.tmpl', 'form.tmpl', 'selfmodify.tmpl',
-                  'modify.tmpl', 'service_unavailable.tmpl'
+                  'modify.tmpl', 'service_unavailable.tmpl',
+                  'reset_password_req.tmpl', 'reset_password_set.tmpl',
                   ):
             self.temp[t] = self.temp_lookup.get_template(t)
 
@@ -439,6 +450,12 @@ class LdapCherry(object):
             )
             self._init_backends(config)
             self._check_backends()
+
+            # init server-side autofill
+            self._init_autofill(config)
+
+            # init password reset class
+            self.resetpassword = ResetPassword(config['resetpassword'], self.backends, cherrypy.log.error)
 
             # loading the ppolicy
             self._init_ppolicy(config)
@@ -634,6 +651,14 @@ class LdapCherry(object):
                     "You must be logged in to access this ressource.",
                     )
 
+    def _autofill_attrs(self, backend, attrs):
+        """ Copy attributes dict and add autofill values """
+        ret = attrs.copy()
+        if backend in self.backends_autofill:
+            for key in self.backends_autofill[backend]:
+                ret[key] = self.backends_autofill[backend][key] % attrs
+        return ret
+
     def _adduser(self, params):
         cherrypy.log.error(
             msg="add user form attributes: " + str(params),
@@ -647,10 +672,11 @@ class LdapCherry(object):
                 pwd2 = attr + '2'
                 if params['attrs'][pwd1] != params['attrs'][pwd2]:
                     raise PasswordMissMatch()
-                if not self._checkppolicy(params['attrs'][pwd1])['match']:
+                if params['attrs'][pwd1] != '' and \
+                   not self._checkppolicy(params['attrs'][pwd1])['match']:
                     raise PPolicyError()
                 params['attrs'][attr] = params['attrs'][pwd1]
-            if attr in params['attrs']:
+            if attr in params['attrs'] and self.attributes.attributes[attr]['type'] != 'readonly':
                 self.attributes.check_attr(attr, params['attrs'][attr])
                 backends = self.attributes.get_backends_attributes(attr)
                 for b in backends:
@@ -660,7 +686,7 @@ class LdapCherry(object):
         added = False
         for b in badd:
             try:
-                self.backends[b].add_user(badd[b])
+                self.backends[b].add_user(self._autofill_attrs(b, badd[b]))
                 added = True
             except UserAlreadyExists as e:
                 self._add_notification(
@@ -702,7 +728,7 @@ class LdapCherry(object):
             severity=logging.DEBUG
         )
 
-    def _modify_attrs(self, params, attr_list, username):
+    def _modify_attrs(self, params, attr_list, username, autofill=True):
         badd = {}
         for attr in attr_list:
             if self.attributes.attributes[attr]['type'] == 'password':
@@ -717,7 +743,9 @@ class LdapCherry(object):
                                 )['match']:
                         raise PPolicyError()
                     params['attrs'][attr] = params['attrs'][pwd1]
-            if attr in params['attrs'] and params['attrs'][attr] != '':
+            if attr in params['attrs'] and params['attrs'][attr] != '' \
+               and self.attributes.attributes[attr]['type'] != 'readonly' \
+               and not ('immutable' in self.attributes.attributes[attr] and self.attributes.attributes[attr]['immutable']):
                 self.attributes.check_attr(attr, params['attrs'][attr])
                 backends = self.attributes.get_backends_attributes(attr)
                 for b in backends:
@@ -726,6 +754,8 @@ class LdapCherry(object):
                     badd[b][backends[b]] = params['attrs'][attr]
         for b in badd:
             try:
+                if autofill:
+                    badd[b] = self._autofill_attrs(b, badd[b])
                 self.backends[b].set_attrs(username, badd[b])
             except UserDoesntExist as e:
                 self._add_notification(
@@ -745,6 +775,7 @@ class LdapCherry(object):
             params,
             self.attributes.get_selfattributes(),
             username,
+            autofill=False,
             )
         cherrypy.log.error(
             msg="user '" + username + "' modified his attributes",
@@ -766,7 +797,8 @@ class LdapCherry(object):
         badd = self._modify_attrs(
             params,
             self.attributes.get_attributes(),
-            username
+            username,
+            autofill=True,
             )
 
         sess = cherrypy.session
@@ -885,7 +917,7 @@ class LdapCherry(object):
     def signin(self, url=None):
         """simple signin page
         """
-        return self.temp['login.tmpl'].render(url=url)
+        return self.temp['login.tmpl'].render(url=url, signin=True)
 
     @cherrypy.expose
     @exception_decorator
@@ -950,6 +982,34 @@ class LdapCherry(object):
 
     @cherrypy.expose
     @exception_decorator
+    def reset_password(self, login=None, token=None, password1=None, password2=None):
+        """ send email with a token to reset password
+        """
+        if not login and not token:
+            """
+            stage 1: show form
+            """
+            return self.temp['reset_password_req.tmpl'].render(signin=True, confirm=False)
+        elif login:
+            """
+            stage 2: check user and send token
+            """
+            self.resetpassword.send_token(login)
+            return self.temp['reset_password_req.tmpl'].render(signin=True, confirm=True)
+        elif token and not password1:
+            """
+            stage 3: form to change password
+            """
+            return self.temp['reset_password_set.tmpl'].render(signin=True, token=token, changed=False)
+        elif token and password1 and password2:
+            """
+            stage 4: change password
+            """
+            self.resetpassword.change_password(token, password1)
+            return self.temp['reset_password_set.tmpl'].render(signin=True, changed=True)
+
+    @cherrypy.expose
+    @exception_decorator
     def index(self):
         """main page rendering
         """
@@ -991,20 +1051,45 @@ class LdapCherry(object):
     @cherrypy.expose
     @exception_decorator
     def checkppolicy(self, **params):
-        """ search user page """
-        self._check_auth(must_admin=False, redir_login=False)
+        """ check if password matches policy (Ajax) """
         keys = list(params.keys())
         if len(keys) != 1:
             cherrypy.response.status = 400
             return "bad argument"
         password = params[keys[0]]
-        is_admin = self._check_admin()
         ret = self._checkppolicy(password)
         if ret['match']:
             cherrypy.response.status = 200
+            return "OK"
+        else:
+            cherrypy.response.status = '400 %s' % (ret['reason'])
+            return ret['reason']
+
+    @cherrypy.expose
+    @exception_decorator
+    def checkusername(self, **params):
+        """ check if username is available (Ajax) """
+        self._check_auth(must_admin=False, redir_login=False)
+        keys = list(params.keys())
+        if len(keys) != 1:
+            cherrypy.response.status = 400
+            return "bad argument"
+        username = params[keys[0]]
+        found = False
+        for b in self.backends:
+            try:
+                tmp = self.backends[b].get_user(username)
+            except UserDoesntExist:
+                pass
+            else:
+                found = True
+                break
+        if found:
+            cherrypy.response.status = "400 Username '{}' is already in use.".format(username)
+            return "username in use"
         else:
             cherrypy.response.status = 200
-        return json.dumps(ret, separators=(',', ':'))
+            return "OK"
 
     @cherrypy.expose
     @exception_decorator
@@ -1012,12 +1097,16 @@ class LdapCherry(object):
         """ search user page """
         self._check_auth(must_admin=True)
         is_admin = self._check_admin()
+        """
         if searchstring is not None:
             res = self._search(searchstring)
         else:
             res = None
+        """
+        res = self._search(searchstring or '')
         attrs_list = self.attributes.get_search_attributes()
         return self.temp['searchadmin.tmpl'].render(
+            searchstring=searchstring or '',
             searchresult=res,
             attrs_list=attrs_list,
             is_admin=is_admin,

@@ -1,0 +1,11 @@
+[Unit]
+Description=LdapCherry Account Manager
+
+[Service]
+Type=exec
+User=ldapcherry
+Group=ldapcherry
+EnvironmentFile=-/etc/default/ldapcherryd
+WorkingDirectory=/srv/www/ldapcherry
+ExecStart=/srv/www/ldapcherry/bin/ldapcherryd -c $CONFIG_FILE $LC_OPTIONS
+

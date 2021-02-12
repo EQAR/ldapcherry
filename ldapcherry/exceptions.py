@@ -85,8 +85,9 @@ class PasswordMissMatch(Exception):
 
 
 class PPolicyError(Exception):
-    def __init__(self):
-        self.log = "password doesn't match ppolicy"
+    def __init__(self, reason=''):
+        self.reason = reason
+        self.log = "password doesn't match ppolicy: %(reason)s" % { 'reason': reason }
 
 
 class MissingMainFile(Exception):
@@ -218,6 +219,24 @@ class GroupDoesntExist(Exception):
             " in backend '" + backend + "'"
 
 
+class PermissionDenied(Exception):
+    def __init__(self, dn, backend):
+        self.dn = dn
+        self.bakend = backend
+        self.log = \
+            "permission denied on" \
+            " '" + dn + "'" \
+            " in backend '" + backend + "'"
+
+
+class InvalidToken(Exception):
+    def __init__(self, reason):
+        self.reason = reason
+        self.log = \
+            "invalid password reset token" \
+            " submitted: '" + reason + "'"
+
+
 class TemplateRenderError(Exception):
     def __init__(self, error):
         self.log = "Template Render Error: " + error
@@ -235,10 +254,14 @@ def exception_decorator(func):
             cherrypy.response.status = 500
             self._handle_exception(e)
             username = self._check_session()
-            if not username:
-                return self.temp['service_unavailable.tmpl'].render()
-            is_admin = self._check_admin()
             et = type(e)
+            if not username:
+                if et is InvalidToken:
+                    message = "The password reset token you provided is invalid."
+                else:
+                    message = None
+                return self.temp['service_unavailable.tmpl'].render(message=message)
+            is_admin = self._check_admin()
             if et is UserDoesntExist:
                 user = e.user
                 return self.temp['error.tmpl'].render(
@@ -260,6 +283,24 @@ def exception_decorator(func):
                     is_admin=is_admin,
                     alert='danger',
                     message="Missing group, please check logs for details"
+                    )
+            elif et is PermissionDenied:
+                return self.temp['error.tmpl'].render(
+                    is_admin=is_admin,
+                    alert='danger',
+                    message="You do not have sufficient permissions on object '" + e.dn + "', please check logs for details"
+                    )
+            elif et is PPolicyError:
+                return self.temp['error.tmpl'].render(
+                    is_admin=is_admin,
+                    alert='danger',
+                    message="The password does not fit the policy: %(reason)s" % { 'reason': e.reason }
+                    )
+            elif et is WrongAttrValue:
+                return self.temp['error.tmpl'].render(
+                    is_admin=is_admin,
+                    alert='danger',
+                    message="The value provided in '%(attr)s' does not fit the %(type)s data type" % { 'attr': e.attr, 'type': e.attrtype }
                     )
             else:
                 return self.temp['error.tmpl'].render(

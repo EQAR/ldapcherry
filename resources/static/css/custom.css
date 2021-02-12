@@ -1,3 +1,36 @@
+.container {
+  background-color: #E6F6FF;
+  margin: 15px auto;
+  padding-top: 10px;
+}
+.navbar {
+  border: none;
+  border-bottom: 1px solid rgba(24,73,143,1);
+  border-radius: 0;
+}
+a {
+  color: rgba(24,73,143,0.8);
+}
+a:hover {
+  color: rgba(24,73,143,1);
+}
+.navbar-brand:hover {
+  text-decoration: underline;
+}
+h1, h2, h3 {
+  margin-top: 15px;
+  margin-bottom: 25px;
+}
+h1 {
+  font-size: 24px;
+  color: rgba(24,73,143,1);
+  text-align: center;
+}
+h2 {
+  font-size: 16px;
+}
+
+
 .btn.red {
   background-color: hsl(8, 76%, 30%) !important;
   background-repeat: repeat-x;
@@ -60,15 +93,14 @@
 .bottom-buffer { margin-bottom:30px; }
 
 div#footer {
-        position:fixed;
-        bottom: 0px;
-        padding-top: 10px;
-        border-top: 1px solid gray;
-        width: 100%;
-        z-index: 1;
-        background-color: #f5f5f5;
-        font-size: 12px;
-        text-align: center;
+  margin: 20px 0 0 0;
+  border-top: 1px solid rgba(24,73,143,1);
+  padding: 8px 4px 0 4px;
+  font-size: 14px;
+  color: rgba(24,73,143,0.8);
+}
+div#footer a {
+  text-decoration: underline;
 }
 
 .form-control:-moz-read-only { /* For Firefox */
@@ -79,4 +111,8 @@ div#footer {
 .form-control:read-only {
     background-color: white;
     cursor: default;
+}
+.form-control.form-control__readonly:read-only {
+    color: #888;
+    background-color: #eee;
 }
